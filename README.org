@@ -1,0 +1,48 @@
+我们经常遇到这样的场景，需要远程登录到某个机器执行特定的命令。这个时候ssh是一个很好的选择，但是需要配置ssh，而广泛配置ssh是一种不安全的行为，ssh权限太大了。例如，我们做了个简易上线系统。jenkins构建完成后，需要把构建部署到线上，此时可以先把构建好的应用scp到线上机器，然后重启线上服务。从jenkins机器ssh到线上，需要root权限才能重启服务，这是很常见的。但从jenkins机器ssh到线上并不十分安全，通常只有指定的机器才可以ssh到线上，这些指定的机器有特殊的安全措施。
+
+我们需要一种途径，能够让机器接受远程命令，然后执行远程命令。通常远程命令是高度受限的。inflexible-ssh 正是为此而设计。
+
+
+* 警告
+开发中，尚未完工，Please wait ...
+
+* 安装
+** 手动安装
+#+BEGIN_SRC bash
+git clone https://github.com/zzyongx/inflexible-ssh.git
+cp src/inflexible-ssh          /usr/local/bin/inflexible-ssh
+cp scripts/inflexible-ssh.init /etc/init.d/inflexible-ssh
+#+END_SRC
+
+** rpm安装
+打包命令 =./scripts/makerpm=  当前目录输出 =inflexible-ssh-X.Y.Z.noarch.rpm=
+
+* 配置
+目录结构如下:
+#+BEGIN_EXAMPLE
+etc
+├── usera
+│   ├── password
+│   └── scripta.sh
+└── userb
+    ├── deploy
+    │   └── start.sh
+    └── password
+#+END_EXAMPLE
+etc 是配合目录，每个用户一个子目录，用户子目录下有个password文件，用于存放用户密码，其它目录或文件用于存放要执行的命令或脚本（可以是任何linux可执行程序）
+
+* 启动
+利用 service 启动，可以添加到开机启动中 =service inflexible-ssh start=
+手动启动 ~inflexible-ssh -f etc -P 2222 -l /var/log/inflexible-ssh/inflexible-ssh.log -p /var/run/inflexible-ssh.pid~ 通过 =-f= 指定配置目录， =-P= 指定监听端口， =-l= 指定日志文件， =-p= 指定PID文件。
+
+* 使用
+=inflexible-ssh= 在服务端启动后，就可有通过任意的tcp程序连接了，这里我们使用=nc= ， =echo usera:password/scripta.sh | nc localhost 2222=
+
+以通过jenkins部署war包到名为web的机器为例，假设war包名字为example-1.0.war。
+1. 用rsync命令把war把放到web机器 =rsync example-1.0.war web::repo/example-1.0.war=
+2. 通过 inflexible-ssh 执行jetty命令 =echo jenkins:dpf2/deploy/start.sh | nc web 2222= 这里用户名是jenkins，密码是dpf2
+
+* 优势
+1. 部署简单，体积小，没有依赖。
+2. 安全，只匹配 =etc= 目录下文件，这些文件都是用户部署的，用户只有能ssh才能部署（也可以通过配置管理工具）。
+3. 强大， =etc= 下的文件可以是脚本，二进制程序等任何可执行文件，这些文件完全由用户编写，用户想干啥干啥。
